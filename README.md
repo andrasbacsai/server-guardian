@@ -1,6 +1,6 @@
 # server-guardian
-This is a simple bash script that monitor the server high cpu and ram usage, check the systemctl services status and the hard disk free space.
-If the ram or cpu usage is greather then limit or a service is failed or the disk usage is greather then limit, send a message to telegram user
+This is a simple bash script that monitors the server high CPU and RAM usage, checks the systemctl services status, hard disk free space, and required processes.
+If the RAM or CPU usage exceeds the limit, a service fails, disk usage exceeds the limit, or required processes are not running, it sends a message to a Telegram user.
 
 ## How to use
 - `sudo chown -R root:root /path/to/server-guardian`
@@ -13,7 +13,7 @@ If the ram or cpu usage is greather then limit or a service is failed or the dis
 - `* * * * * cd /path/to/server-guardian/ && ./guardian > /dev/null 2>&1`
 
 ## Advanced Use (override .config file values)
-- `* * * * * cd /path/to/server-guardian/ && ./guardian --warn-every 30 --watch-services 0 --watch-cpu 1 --watch-ram 1 --watch-hard-disk 0 --cpu-warning-level high --memory-limit 60 --disk-space-limit 80 --config /home/my-custom/.config --config-telegram-variable-token TELEGRAM_TOKEN_CUSTOM_NAME --config-telegram-variable-chatid TELEGRAM_CHAT_ID_CUSTOM_NAME > /dev/null 2>&1`
+- `* * * * * cd /path/to/server-guardian/ && ./guardian --warn-every 30 --watch-services 0 --watch-cpu 1 --watch-ram 1 --watch-hard-disk 0 --watch-processes 1 --process-patterns "postgres.*walreceiver|nginx.*master" --cpu-warning-level high --memory-limit 60 --disk-space-limit 80 --config /home/my-custom/.config --config-telegram-variable-token TELEGRAM_TOKEN_CUSTOM_NAME --config-telegram-variable-chatid TELEGRAM_CHAT_ID_CUSTOM_NAME --config-telegram-variable-topic-id telegram_topic_id > /dev/null 2>&1`
 
 **Note**: when you pass an option, this will overrides the default value stored in the config file.
 
@@ -36,13 +36,19 @@ If the ram or cpu usage is greather then limit or a service is failed or the dis
 `--memory-limit` Memory percentage limit
     
 `--disk-space-limit` disk space percentage limit
-    
+
+`--watch-processes` 1 to enable or 0 to disable process monitoring
+
+`--process-patterns` pipe-delimited regex patterns to match process names (ex: `postgres.*walreceiver|nginx.*master`)
+
 `--config` path to custom config file with telegram bot key and telegram chat id options
-    
+
 `--config-telegram-variable-token` the token variable name (not the token key) stored in custom config file (ex: TELEGRAM_TOKEN_CUSTOM_NAME)
-    
+
 `--config-telegram-variable-chatid` the chat id variable name (not the id) stored in custom config file (ex: TELEGRAM_CHAT_ID_CUSTOM_NAME)
-    
+
+`--config-telegram-variable-topic-id` the topic id variable name stored in custom config file. Used to send messages to a specific topic in a supergroup (ex: telegram_topic_id)
+
 `--test` test if the bot is working
 
 `-h, --help` show this help
