@@ -52,7 +52,10 @@ Options
     
 --config-telegram-variable-chatid
     the chat id variable name (not the id) stored in custom config file (ex: TELEGRAM_CHAT_ID)
-    
+
+--config-telegram-variable-topic-id
+    the topic id variable name stored in custom config file. Used to send messages to a specific topic in a supergroup (ex: telegram_topic_id)
+
 --test
     test if the bot is working
 
@@ -90,14 +93,41 @@ send_message() {
     top -n1 -b > $top_report_file
   fi
   
-  curl -s -X POST "https://api.telegram.org/bot$telegram_bot_token/sendMessage" -F chat_id=$telegram_user_chat_id -F text="$telegram_title $telegram_message" -F parse_mode="MarkdownV2"
+  curl -s -X POST "https://api.telegram.org/bot$telegram_bot_token/sendMessage" \
+    -F chat_id=$telegram_user_chat_id \
+    -F message_thread_id=$telegram_topic_id \
+    -F text="$telegram_title $telegram_message" \
+    -F parse_mode="MarkdownV2"
 
   exit 0
 }
 
-# test if telegram api works
+# test if telegram api works and report process status
 send_test_message() {
-  curl -s -X POST "https://api.telegram.org/bot$telegram_bot_token/sendMessage" -F chat_id=$telegram_user_chat_id -F text="$telegram_title Ok the server guardian is working" -F parse_mode="MarkdownV2"
+  test_message="Ok the server guardian is working"
+
+  # Add process status to test message if enabled
+  if [ "1" == "$watch_processes" ]; then
+    test_message="$test_message\\n\\n*Process Status:*"
+    IFS='|' read -ra PATTERNS <<< "$process_patterns"
+    for pattern in "${PATTERNS[@]}"; do
+      # Trim whitespace from pattern
+      pattern=$(echo "$pattern" | xargs)
+
+      # Check if process exists (exclude guardian script itself)
+      if pgrep -f "$pattern" | grep -v $$ > /dev/null; then
+        test_message="$test_message\\n✓ $pattern"
+      else
+        test_message="$test_message\\n✗ $pattern (NOT FOUND)"
+      fi
+    done
+  fi
+
+  curl -s -X POST "https://api.telegram.org/bot$telegram_bot_token/sendMessage" \
+    -F chat_id=$telegram_user_chat_id \
+    -F message_thread_id=$telegram_topic_id \
+    -F text="$telegram_title $test_message" \
+    -F parse_mode="MarkdownV2"
   exit 0
 }
 
@@ -126,9 +156,12 @@ memory_perc_limit=""
 watch_services=""
 watch_hard_disk=""
 disk_space_perc_limit=""
+watch_processes=""
+process_patterns=""
 telegram_title="\[ Server \`$server_name\` \] \\-\\-"
 telegram_variable_token="telegram_bot_token"
 telegram_variable_chatid="telegram_user_chat_id"
+telegram_topic_id=""
 send_test="no"
 
 ##########################
@@ -166,6 +199,12 @@ while [ $# -gt 0 ] ; do
     --disk-space-limit)
       disk_space_perc_limit=$2
       ;;
+    --watch-processes)
+      watch_processes=$2
+      ;;
+    --process-patterns)
+      process_patterns=$2
+      ;;
     --config)
       if [ ! -f $2 ]; then
         printf "Sorry but this config file not exists.\n"
@@ -178,6 +217,9 @@ while [ $# -gt 0 ] ; do
       ;;
     --config-telegram-variable-chatid)
       telegram_variable_chatid=$2
+      ;;
+    --config-telegram-variable-topic-id)
+      telegram_topic_id=$2
       ;;
   esac
   shift
@@ -255,6 +297,21 @@ if [ "" == "$disk_space_perc_limit" ] && [ "1" == "$watch_hard_disk" ]; then
   exit 1
 fi
 
+if [ "" == "$watch_processes" ]; then
+  watch_processes=$(awk -F'=' '/^watch_processes=/ { print $2 }' $config_file)
+fi
+if [ "" == "$watch_processes" ]; then
+  printf "Pass the --watch-processes variable from cli or add watch_processes variable to config file.\n"
+  exit 1
+fi
+if [ "" == "$process_patterns" ]; then
+  process_patterns=$(awk -F'=' '/^process_patterns=/ { print $2 }' $config_file)
+fi
+if [ "" == "$process_patterns" ] && [ "1" == "$watch_processes" ]; then
+  printf "Pass the --process-patterns variable from cli or add process_patterns variable to config file.\n"
+  exit 1
+fi
+
 # Check telegram bot key and chat id
 telegram_bot_token=$(awk -F'=' '/^'$telegram_variable_token'=/ { print $2 }' $config_file)
 if [ "" == "$telegram_bot_token" ]; then
@@ -266,6 +323,7 @@ if [ "" == "$telegram_user_chat_id" ]; then
   printf "The variable $telegram_user_chat_id not exists into config file or is empty.\n"
   exit 1
 fi
+telegram_topic_id=$(awk -F'=' '/^telegram_topic_id=/ { print $2 }' $config_file)
 
 
 ##########################
@@ -317,6 +375,21 @@ if [ "1" == "$watch_hard_disk" ]; then
     message="Hard disk full (space used $disk_perc_used%)"
     send_message "$message" "no"
   fi
+fi
+
+# Check if required processes are running
+if [ "1" == "$watch_processes" ]; then
+  IFS='|' read -ra PATTERNS <<< "$process_patterns"
+  for pattern in "${PATTERNS[@]}"; do
+    # Trim whitespace from pattern
+    pattern=$(echo "$pattern" | xargs)
+
+    # Check if process matching the pattern exists (exclude guardian script itself)
+    if ! pgrep -f "$pattern" | grep -v $$ > /dev/null; then
+      message="Process not found: $pattern"
+      send_message "$message" "no"
+    fi
+  done
 fi
 
 # check if bot works

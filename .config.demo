@@ -8,3 +8,5 @@ watch_cpu=1
 watch_ram=1
 watch_services=1
 watch_hard_disk=1
+watch_processes=1
+process_patterns=postgres.*walreceiver
