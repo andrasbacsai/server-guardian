@@ -102,33 +102,23 @@ send_message() {
   exit 0
 }
 
-# Escape special characters for Telegram MarkdownV2
-escape_markdown_v2() {
-  local text="$1"
-  # Escape all special MarkdownV2 characters: _ * [ ] ( ) ~ ` > # + - = | { } . !
-  text=$(echo "$text" | sed 's/[_*\[\]()~`>#+=|{}\.!-]/\\&/g')
-  echo "$text"
-}
-
 # test if telegram api works and report process status
 send_test_message() {
   test_message="Ok the server guardian is working"
 
   # Add process status to test message if enabled
   if [ "1" == "$watch_processes" ]; then
-    test_message="$test_message\\n\\n*Process Status:*"
+    test_message="$test_message\n\nProcess Status:"
     IFS='|' read -ra PATTERNS <<< "$process_patterns"
     for pattern in "${PATTERNS[@]}"; do
       # Trim whitespace from pattern
       pattern=$(echo "$pattern" | xargs)
-      # Escape pattern for MarkdownV2
-      escaped_pattern=$(escape_markdown_v2 "$pattern")
 
       # Check if process exists (exclude guardian script itself)
       if pgrep -f "$pattern" | grep -v $$ > /dev/null; then
-        test_message="$test_message\\n✓ $escaped_pattern"
+        test_message="$test_message\n✓ $pattern"
       else
-        test_message="$test_message\\n✗ $escaped_pattern \\(NOT FOUND\\)"
+        test_message="$test_message\n✗ $pattern (NOT FOUND)"
       fi
     done
   fi
@@ -136,8 +126,7 @@ send_test_message() {
   curl -s -X POST "https://api.telegram.org/bot$telegram_bot_token/sendMessage" \
     -F chat_id=$telegram_user_chat_id \
     -F message_thread_id=$telegram_topic_id \
-    -F text="$telegram_title $test_message" \
-    -F parse_mode="MarkdownV2"
+    -F text="$telegram_title $test_message"
   exit 0
 }
 
